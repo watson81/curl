@@ -24,13 +24,14 @@
 .SH NAME
 mk-ca-bundle \- convert mozilla's certdata.txt to PEM format
 .SH SYNOPSIS
-mk-ca-bundle [bilnqtuv]
+mk-ca-bundle [bilnqtuvyz]
 .I [outputfile]
 .SH DESCRIPTION
 The mk-ca-bundle tool downloads the certdata.txt file from Mozilla's source
-tree over HTTP, then parses certdata.txt and extracts CA Root Certificates
-into PEM format.  These are then processed with the OpenSSL commandline tool
-to produce the final ca-bundle file.
+tree over HTTP, then parses certdata.txt and extracts certificates
+into PEM format.  By default, only CA root certificates trusted to issue SSL
+server authentication certificates are extracted. These are then processed with
+the OpenSSL commandline tool to produce the final ca-bundle file.
 
 The default \fIoutputfile\fP name is \fBca-bundle.crt\fP. By setting it to '-'
 (a single dash) you will get the output sent to STDOUT instead of a file.
@@ -62,6 +63,17 @@ include plain text listing of certificates
 unlink (remove) certdata.txt after processing
 .IP -v
 be verbose and print out processed CAs
+.IP -y [purposes]
+comma separated list of Mozilla trust purposes to include in output. Valid
+purposes are: ALL, DIGITAL_SIGNATURE, NON_REPUDIATION, KEY_ENCIPHERMENT,
+DATA_ENCIPHERMENT, KEY_AGREEMENT, KEY_CERT_SIGN, CRL_SIGN,
+SERVER_AUTH (default), CLIENT_AUTH, CODE_SIGNING, EMAIL_PROTECTION,
+IPSEC_END_SYSTEM, IPSEC_TUNNEL, IPSEC_USER, TIME_STAMPING, STEP_UP_APPROVED
+(Added in version 1.21, Perl version only)
+.IP -z [levels]
+comma separated list of Mozilla trust levels to include in output. Valid trust
+levels are: ALL, TRUSTED_DELEGATOR (default), NOT_TRUSTED, MUST_VERIFY_TRUST, TRUSTED
+(Added in version 1.21, Perl version only)
 .SH EXIT STATUS
 Returns 0 on success. Returns 1 if it fails to download data.
 .SH CERTDATA FORMAT
