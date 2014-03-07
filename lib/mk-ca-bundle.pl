@@ -67,30 +67,30 @@ my $opt_y_def = $opt_y = "SERVER_AUTH";
 my $opt_z_def = $opt_z = "TRUSTED_DELEGATOR";
 
 my @valid_mozilla_trust_purposes = (
-   "DIGITAL_SIGNATURE",
-   "NON_REPUDIATION",
-   "KEY_ENCIPHERMENT",
-   "DATA_ENCIPHERMENT",
-   "KEY_AGREEMENT",
-   "KEY_CERT_SIGN",
-   "CRL_SIGN",
-   "SERVER_AUTH",
-   "CLIENT_AUTH",
-   "CODE_SIGNING",
-   "EMAIL_PROTECTION",
-   "IPSEC_END_SYSTEM",
-   "IPSEC_TUNNEL",
-   "IPSEC_USER",
-   "TIME_STAMPING",
-   "STEP_UP_APPROVED"
-   );
+  "DIGITAL_SIGNATURE",
+  "NON_REPUDIATION",
+  "KEY_ENCIPHERMENT",
+  "DATA_ENCIPHERMENT",
+  "KEY_AGREEMENT",
+  "KEY_CERT_SIGN",
+  "CRL_SIGN",
+  "SERVER_AUTH",
+  "CLIENT_AUTH",
+  "CODE_SIGNING",
+  "EMAIL_PROTECTION",
+  "IPSEC_END_SYSTEM",
+  "IPSEC_TUNNEL",
+  "IPSEC_USER",
+  "TIME_STAMPING",
+  "STEP_UP_APPROVED"
+);
 
 my @valid_mozilla_trust_levels = (
-    "TRUSTED_DELEGATOR",    # CAs
-    "NOT_TRUSTED",          # Don't trust these certs.
-    "MUST_VERIFY_TRUST",    # This explicitly tells us that it ISN'T a CA but is otherwise ok. In other words, this should tell the app to ignore any other sources that claim this is a CA.
-    "TRUSTED"               # This cert is trusted, but only for itself and not for delegates (i.e. it is not a CA).
-    );
+  "TRUSTED_DELEGATOR",    # CAs
+  "NOT_TRUSTED",          # Don't trust these certs.
+  "MUST_VERIFY_TRUST",    # This explicitly tells us that it ISN'T a CA but is otherwise ok. In other words, this should tell the app to ignore any other sources that claim this is a CA.
+  "TRUSTED"               # This cert is trusted, but only for itself and not for delegates (i.e. it is not a CA).
+);
 
 $0 =~ s@.*(/|\\)@@;
 $Getopt::Std::STANDARD_HELP_VERSION = 1;
@@ -186,8 +186,7 @@ sub PARSE_PARAM_TRUST($$@) {
   # Find all values which are not in the list of valid values or "ALL"
   my @invalid = grep { !IS_IN_LIST($_,"ALL",@valid_values) } @values;
 
-  if ( scalar(@invalid) > 0 )
-  {
+  if ( scalar(@invalid) > 0 ) {
     # Tell the user which parameters were invalid and print the standard help message which will exit
     print "Error: Invalid ", $description, scalar(@invalid) == 1 ? ": " : "s: ", join( ", ", map { "\"$_\"" } @invalid ), "\n";
     HELP_MESSAGE();
@@ -321,7 +320,7 @@ while (<TXT>) {
         } elsif ( !IS_IN_LIST($2,@valid_mozilla_trust_levels) ) {
           print STDERR "Warning: Unrecognized trust level for cert: $caname. Trust purpose: $1. Trust Level: $2\n" if (!$opt_q);
         } else {
-            push @{$trust_purposes_by_level{$2}}, $1;
+          push @{$trust_purposes_by_level{$2}}, $1;
         }
       }
     }
@@ -337,8 +336,7 @@ while (<TXT>) {
       print CRT "\n$caname\n";
 
       my $maxStringLength = length($caname);
-      foreach my $key (keys %trust_purposes_by_level)
-      {
+      foreach my $key (keys %trust_purposes_by_level) {
          my $string = $key . ": " . join(", ", @{$trust_purposes_by_level{$key}});
          $maxStringLength = List::Util::max( length($string), $maxStringLength );
          print CRT $string . "\n";
@@ -350,17 +348,17 @@ while (<TXT>) {
         my @hashes = ('md5', 'sha1', 'sha256');
         my $pipe = "";
         foreach my $hash (@hashes) {
-            $pipe = "|$openssl x509 -" . $hash . " -fingerprint -noout -inform PEM";
-            if (!$stdout) {
-              $pipe .= " >> $crt.~";
-              close(CRT) or die "Couldn't close $crt.~: $!";
-            }
-            open(TMP, $pipe) or die "Couldn't open openssl pipe: $!";
-            print TMP $pem;
-            close(TMP) or die "Couldn't close openssl pipe: $!";
-            if (!$stdout) {
-              open(CRT, ">>$crt.~") or die "Couldn't open $crt.~: $!";
-            }
+          $pipe = "|$openssl x509 -" . $hash . " -fingerprint -noout -inform PEM";
+          if (!$stdout) {
+            $pipe .= " >> $crt.~";
+            close(CRT) or die "Couldn't close $crt.~: $!";
+          }
+          open(TMP, $pipe) or die "Couldn't open openssl pipe: $!";
+          print TMP $pem;
+          close(TMP) or die "Couldn't close openssl pipe: $!";
+          if (!$stdout) {
+            open(CRT, ">>$crt.~") or die "Couldn't open $crt.~: $!";
+          }
         }
         $pipe = "|$openssl x509 -text -inform PEM";
         if (!$stdout) {
