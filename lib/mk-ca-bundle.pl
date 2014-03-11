@@ -337,10 +337,12 @@ while (<TXT>) {
       print CRT "\n$caname\n";
 
       my $maxStringLength = length($caname);
-      foreach my $key (keys %trust_purposes_by_level) {
-         my $string = $key . ": " . join(", ", @{$trust_purposes_by_level{$key}});
-         $maxStringLength = List::Util::max( length($string), $maxStringLength );
-         print CRT $string . "\n";
+      if ($opt_t) {
+        foreach my $key (keys %trust_purposes_by_level) {
+           my $string = $key . ": " . join(", ", @{$trust_purposes_by_level{$key}});
+           $maxStringLength = List::Util::max( length($string), $maxStringLength );
+           print CRT $string . "\n";
+        }
       }
       print CRT ("=" x $maxStringLength . "\n");
       if (!$opt_t) {
