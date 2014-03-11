@@ -34,7 +34,7 @@ use Getopt::Std;
 use MIME::Base64;
 use LWP::UserAgent;
 use strict;
-use vars qw($opt_b $opt_d $opt_f $opt_h $opt_i $opt_l $opt_n $opt_q $opt_t $opt_u $opt_v $opt_w $opt_y $opt_z);
+use vars qw($opt_b $opt_d $opt_f $opt_h $opt_i $opt_l $opt_n $opt_p $opt_q $opt_t $opt_u $opt_v $opt_w);
 use List::Util;
 use Text::Wrap;
 
@@ -63,8 +63,9 @@ my $version = '1.21';
 $opt_w = 76; # default base64 encoded lines length
 
 # default cert types to include in the output (default is to include CAs which may issue SSL server certs)
-my $opt_y_def = $opt_y = "SERVER_AUTH";
-my $opt_z_def = $opt_z = "TRUSTED_DELEGATOR";
+my $default_mozilla_trust_purposes = "SERVER_AUTH";
+my $default_mozilla_trust_levels = "TRUSTED_DELEGATOR";
+$opt_p = $default_mozilla_trust_purposes . ":" . $default_mozilla_trust_levels;
 
 my @valid_mozilla_trust_purposes = (
   "DIGITAL_SIGNATURE",
@@ -94,7 +95,7 @@ my @valid_mozilla_trust_levels = (
 
 $0 =~ s@.*(/|\\)@@;
 $Getopt::Std::STANDARD_HELP_VERSION = 1;
-getopts('bd:fhilnqtuvw:y:z:');
+getopts('bd:fhilnp:qtuvw:');
 
 if(!defined($opt_d)) {
     # to make plain "-d" use not cause warnings, and actually still work
@@ -134,7 +135,7 @@ sub WARNING_MESSAGE() {
 }
 
 sub HELP_MESSAGE() {
-  print "Usage:\t${0} [-b] [-d<certdata>] [-f] [-i] [-l] [-n] [-q] [-t] [-u] [-v] [-w<l>] [-y<p>] [-z<l>] [<outputfile>]\n";
+  print "Usage:\t${0} [-b] [-d<certdata>] [-f] [-i] [-l] [-n] [-p<purposes:levels>] [-q] [-t] [-u] [-v] [-w<l>] [<outputfile>]\n";
   print "\t-b\tbackup an existing version of ca-bundle.crt\n";
   print "\t-d\tspecify Mozilla tree to pull certdata.txt or custom URL\n";
   print "\t\t  Valid names are:\n";
@@ -143,17 +144,16 @@ sub HELP_MESSAGE() {
   print "\t-i\tprint version info about used modules\n";
   print "\t-l\tprint license info about certdata.txt\n";
   print "\t-n\tno download of certdata.txt (to use existing)\n";
+  print wrap("\t","\t\t", "-p\tlist of Mozilla trust purposes and levels for certificates to include in output. Takes the form of a comma separated list of purposes, a colon, and a comma separated list of levels. (default: $default_mozilla_trust_purposes:$default_mozilla_trust_levels)"), "\n";
+  print "\t\t  Valid purposes are:\n";
+  print wrap("\t\t    ","\t\t    ", join( ", ", "ALL", @valid_mozilla_trust_purposes ) ), "\n";
+  print "\t\t  Valid levels are:\n";
+  print wrap("\t\t    ","\t\t    ", join( ", ", "ALL", @valid_mozilla_trust_levels ) ), "\n";
   print "\t-q\tbe really quiet (no progress output at all)\n";
   print "\t-t\tinclude plain text listing of certificates\n";
   print "\t-u\tunlink (remove) certdata.txt after processing\n";
   print "\t-v\tbe verbose and print out processed CAs\n";
   print "\t-w <l>\twrap base64 output lines after <l> chars (default: ${opt_w})\n";
-  print wrap("\t","\t\t", "-y <p>\tcomma separated list of Mozilla trust purposes to include in output. (default: ${opt_y_def})"), "\n";
-  print "\t\t  Valid purposes are:\n";
-  print wrap("\t\t    ","\t\t    ", join( ", ", "ALL", @valid_mozilla_trust_purposes ) ), "\n";
-  print wrap("\t","\t\t", "-z <l>\tcomma separated list of Mozilla trust levels to include in output. (default: ${opt_z_def})"), "\n";
-  print "\t\t  Valid levels are:\n";
-  print wrap("\t\t    ","\t\t    ", join( ", ", "ALL", @valid_mozilla_trust_levels ) ), "\n";
   exit;
 }
 
@@ -172,7 +172,7 @@ sub IS_IN_LIST($@) {
 
 # Parses $param_string as a case insensitive comma separated list with optional whitespace
 # validates that only allowed parameters are supplied
-sub PARSE_PARAM_TRUST($$@) {
+sub PARSE_CSV_PARAM($$@) {
   my $description = shift;
   my $param_string = shift;
   my @valid_values = @_;
@@ -197,8 +197,9 @@ sub PARSE_PARAM_TRUST($$@) {
   return @values;
 }
 
-my @included_mozilla_trust_purposes = PARSE_PARAM_TRUST( "trust purpose", $opt_y, @valid_mozilla_trust_purposes );
-my @included_mozilla_trust_levels = PARSE_PARAM_TRUST( "trust level", $opt_z, @valid_mozilla_trust_levels );
+(my $included_mozilla_trust_purposes_string, my $included_mozilla_trust_levels_string) = split( ':', $opt_p );
+my @included_mozilla_trust_purposes = PARSE_CSV_PARAM( "trust purpose", $included_mozilla_trust_purposes_string, @valid_mozilla_trust_purposes );
+my @included_mozilla_trust_levels = PARSE_CSV_PARAM( "trust level", $included_mozilla_trust_levels_string, @valid_mozilla_trust_levels );
 
 sub SHOULD_OUTPUT_CERT(%) {
   my %trust_purposes_by_level = @_;

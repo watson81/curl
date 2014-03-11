@@ -55,6 +55,26 @@ print version info about used modules
 print license info about certdata.txt
 .IP -n
 no download of certdata.txt (to use existing)
+.IP "-p [purposes]:[levels]"
+list of Mozilla trust purposes and levels for certificates to include in output.
+Takes the form of a comma separated list of purposes, a colon, and a comma
+separated list of levels. The default is to include all certificates trusted
+to issue SSL Server certificates (SERVER_AUTH:TRUSTED_DELEGATOR).
+
+(Added in version 1.21, Perl only)
+
+Valid purposes are:
+.RS
+ALL, DIGITAL_SIGNATURE, NON_REPUDIATION, KEY_ENCIPHERMENT,
+DATA_ENCIPHERMENT, KEY_AGREEMENT, KEY_CERT_SIGN, CRL_SIGN,
+SERVER_AUTH (default), CLIENT_AUTH, CODE_SIGNING, EMAIL_PROTECTION,
+IPSEC_END_SYSTEM, IPSEC_TUNNEL, IPSEC_USER, TIME_STAMPING, STEP_UP_APPROVED
+.RE
+
+Valid trust levels are:
+.RS
+ALL, TRUSTED_DELEGATOR (default), NOT_TRUSTED, MUST_VERIFY_TRUST, TRUSTED
+.RE
 .IP -q
 be really quiet (no progress output at all)
 .IP -t
@@ -63,17 +83,6 @@ include plain text listing of certificates
 unlink (remove) certdata.txt after processing
 .IP -v
 be verbose and print out processed CAs
-.IP -y [purposes]
-comma separated list of Mozilla trust purposes to include in output. Valid
-purposes are: ALL, DIGITAL_SIGNATURE, NON_REPUDIATION, KEY_ENCIPHERMENT,
-DATA_ENCIPHERMENT, KEY_AGREEMENT, KEY_CERT_SIGN, CRL_SIGN,
-SERVER_AUTH (default), CLIENT_AUTH, CODE_SIGNING, EMAIL_PROTECTION,
-IPSEC_END_SYSTEM, IPSEC_TUNNEL, IPSEC_USER, TIME_STAMPING, STEP_UP_APPROVED
-(Added in version 1.21, Perl version only)
-.IP -z [levels]
-comma separated list of Mozilla trust levels to include in output. Valid trust
-levels are: ALL, TRUSTED_DELEGATOR (default), NOT_TRUSTED, MUST_VERIFY_TRUST, TRUSTED
-(Added in version 1.21, Perl version only)
 .SH EXIT STATUS
 Returns 0 on success. Returns 1 if it fails to download data.
 .SH CERTDATA FORMAT
