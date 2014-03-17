@@ -34,7 +34,7 @@ use Getopt::Std;
 use MIME::Base64;
 use LWP::UserAgent;
 use strict;
-use vars qw($opt_b $opt_d $opt_f $opt_h $opt_i $opt_l $opt_n $opt_p $opt_q $opt_t $opt_u $opt_v $opt_w);
+use vars qw($opt_b $opt_d $opt_f $opt_h $opt_i $opt_l $opt_n $opt_p $opt_q $opt_s $opt_t $opt_u $opt_v $opt_w);
 use List::Util;
 use Text::Wrap;
 
@@ -93,9 +93,18 @@ my @valid_mozilla_trust_levels = (
   "TRUSTED"               # This cert is trusted, but only for itself and not for delegates (i.e. it is not a CA).
 );
 
+my $default_signature_algorithms = $opt_s = "MD5";
+
+my @valid_signature_algorithms = (
+  "MD5",
+  "SHA1",
+  "SHA256",
+  "SHA512"  
+);
+
 $0 =~ s@.*(/|\\)@@;
 $Getopt::Std::STANDARD_HELP_VERSION = 1;
-getopts('bd:fhilnp:qtuvw:');
+getopts('bd:fhilnp:qs:tuvw:');
 
 if(!defined($opt_d)) {
     # to make plain "-d" use not cause warnings, and actually still work
@@ -135,7 +144,7 @@ sub WARNING_MESSAGE() {
 }
 
 sub HELP_MESSAGE() {
-  print "Usage:\t${0} [-b] [-d<certdata>] [-f] [-i] [-l] [-n] [-p<purposes:levels>] [-q] [-t] [-u] [-v] [-w<l>] [<outputfile>]\n";
+  print "Usage:\t${0} [-b] [-d<certdata>] [-f] [-i] [-l] [-n] [-p<purposes:levels>] [-q] [-s<algorithms>] [-t] [-u] [-v] [-w<l>] [<outputfile>]\n";
   print "\t-b\tbackup an existing version of ca-bundle.crt\n";
   print "\t-d\tspecify Mozilla tree to pull certdata.txt or custom URL\n";
   print "\t\t  Valid names are:\n";
@@ -150,6 +159,9 @@ sub HELP_MESSAGE() {
   print "\t\t  Valid levels are:\n";
   print wrap("\t\t    ","\t\t    ", join( ", ", "ALL", @valid_mozilla_trust_levels ) ), "\n";
   print "\t-q\tbe really quiet (no progress output at all)\n";
+  print wrap("\t","\t\t", "-s\tcomma separated list of certificate signatures/hashes to output in plain text mode. (default: $default_signature_algorithms)\n");
+  print "\t\t  Valid signature algorithms are:\n";
+  print wrap("\t\t    ","\t\t    ", join( ", ", "ALL", @valid_signature_algorithms ) ), "\n";
   print "\t-t\tinclude plain text listing of certificates\n";
   print "\t-u\tunlink (remove) certdata.txt after processing\n";
   print "\t-v\tbe verbose and print out processed CAs\n";
@@ -197,9 +209,16 @@ sub PARSE_CSV_PARAM($$@) {
   return @values;
 }
 
+if ( $opt_p !~ m/:/ ) {
+  print "Error: Mozilla trust identifier list must include both purposes and levels\n";
+  HELP_MESSAGE();
+}
+
 (my $included_mozilla_trust_purposes_string, my $included_mozilla_trust_levels_string) = split( ':', $opt_p );
 my @included_mozilla_trust_purposes = PARSE_CSV_PARAM( "trust purpose", $included_mozilla_trust_purposes_string, @valid_mozilla_trust_purposes );
 my @included_mozilla_trust_levels = PARSE_CSV_PARAM( "trust level", $included_mozilla_trust_levels_string, @valid_mozilla_trust_levels );
+
+my @included_signature_algorithms = PARSE_CSV_PARAM( "signature algorithm", $opt_s, @valid_signature_algorithms );
 
 sub SHOULD_OUTPUT_CERT(%) {
   my %trust_purposes_by_level = @_;
@@ -348,9 +367,8 @@ while (<TXT>) {
       if (!$opt_t) {
         print CRT $pem;
       } else {
-        my @hashes = ('md5', 'sha1', 'sha256');
         my $pipe = "";
-        foreach my $hash (@hashes) {
+        foreach my $hash (@included_signature_algorithms) {
           $pipe = "|$openssl x509 -" . $hash . " -fingerprint -noout -inform PEM";
           if (!$stdout) {
             $pipe .= " >> $crt.~";

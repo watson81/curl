@@ -79,6 +79,16 @@ ALL, TRUSTED_DELEGATOR (default), NOT_TRUSTED, MUST_VERIFY_TRUST, TRUSTED
 be really quiet (no progress output at all)
 .IP -t
 include plain text listing of certificates
+.IP "-s [algorithms]"
+comma separated list of signature algorithms with which to hash/fingerprint
+each certificate and output when run in plain text mode.
+
+(Added in version 1.21, Perl only)
+
+Valid algorithms are:
+.RS
+ALL, NONE, MD5 (default), SHA1, SHA256, SHA512
+.RE
 .IP -u
 unlink (remove) certdata.txt after processing
 .IP -v
