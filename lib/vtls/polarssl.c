@@ -31,7 +31,6 @@
 
 #ifdef USE_POLARSSL
 
-#include <polarssl/compat-1.2.h>
 #include <polarssl/net.h>
 #include <polarssl/ssl.h>
 #include <polarssl/certs.h>
@@ -99,7 +98,7 @@ static int entropy_func_mutex(void *data, unsigned char *output, size_t len)
 }
 /* end of entropy_func_mutex() */
 
-#endif /* THREADING_SUPPORT
+#endif /* THREADING_SUPPORT */
 
 /* Define this to enable lots of debugging for PolarSSL */
 #undef POLARSSL_DEBUG
@@ -152,9 +151,6 @@ polarssl_connect_step1(struct connectdata *conn,
   else if(data->set.ssl.version == CURL_SSLVERSION_SSLv3)
     sni = FALSE; /* SSLv3 has no SNI */
 
-#if POLARSSL_VERSION_NUMBER<0x01010000
-  havege_init(&connssl->hs);
-#else
 #ifdef THREADING_SUPPORT
   entropy_init_mutex(&entropy);
 
@@ -178,14 +174,13 @@ polarssl_connect_step1(struct connectdata *conn,
                                                             -ret, errorbuf);
   }
 #endif /* THREADING_SUPPORT */
-#endif /* POLARSSL_VERSION_NUMBER<0x01010000 */
 
   /* Load the trusted CA */
   memset(&connssl->cacert, 0, sizeof(x509_crt));
 
   if(data->set.str[STRING_SSL_CAFILE]) {
-    ret = x509parse_crtfile(&connssl->cacert,
-                            data->set.str[STRING_SSL_CAFILE]);
+    ret = x509_crt_parse_file(&connssl->cacert,
+                              data->set.str[STRING_SSL_CAFILE]);
 
     if(ret<0) {
 #ifdef POLARSSL_ERROR_C
@@ -203,8 +198,8 @@ polarssl_connect_step1(struct connectdata *conn,
   memset(&connssl->clicert, 0, sizeof(x509_crt));
 
   if(data->set.str[STRING_CERT]) {
-    ret = x509parse_crtfile(&connssl->clicert,
-                            data->set.str[STRING_CERT]);
+    ret = x509_crt_parse_file(&connssl->clicert,
+                              data->set.str[STRING_CERT]);
 
     if(ret) {
 #ifdef POLARSSL_ERROR_C
@@ -219,9 +214,17 @@ polarssl_connect_step1(struct connectdata *conn,
 
   /* Load the client private key */
   if(data->set.str[STRING_KEY]) {
-    ret = x509parse_keyfile(&connssl->rsa,
-                            data->set.str[STRING_KEY],
-                            data->set.str[STRING_KEY_PASSWD]);
+    pk_context pk;
+    pk_init(&pk);
+    ret = pk_parse_keyfile(&pk, data->set.str[STRING_KEY],
+                           data->set.str[STRING_KEY_PASSWD]);
+    if(ret == 0 && !pk_can_do(&pk, POLARSSL_PK_RSA))
+      ret = POLARSSL_ERR_PK_TYPE_MISMATCH;
+    if(ret == 0)
+      rsa_copy(&connssl->rsa, pk_rsa(pk));
+    else
+      rsa_free(&connssl->rsa);
+    pk_free(&pk);
 
     if(ret) {
 #ifdef POLARSSL_ERROR_C
@@ -238,8 +241,8 @@ polarssl_connect_step1(struct connectdata *conn,
   memset(&connssl->crl, 0, sizeof(x509_crl));
 
   if(data->set.str[STRING_SSL_CRLFILE]) {
-    ret = x509parse_crlfile(&connssl->crl,
-                            data->set.str[STRING_SSL_CRLFILE]);
+    ret = x509_crl_parse_file(&connssl->crl,
+                              data->set.str[STRING_SSL_CRLFILE]);
 
     if(ret) {
 #ifdef POLARSSL_ERROR_C
@@ -263,37 +266,20 @@ polarssl_connect_step1(struct connectdata *conn,
   ssl_set_endpoint(&connssl->ssl, SSL_IS_CLIENT);
   ssl_set_authmode(&connssl->ssl, SSL_VERIFY_OPTIONAL);
 
-#if POLARSSL_VERSION_NUMBER<0x01010000
-  ssl_set_rng(&connssl->ssl, havege_rand,
-              &connssl->hs);
-#else
   ssl_set_rng(&connssl->ssl, ctr_drbg_random,
               &connssl->ctr_drbg);
-#endif /* POLARSSL_VERSION_NUMBER<0x01010000 */
   ssl_set_bio(&connssl->ssl,
               net_recv, &conn->sock[sockindex],
               net_send, &conn->sock[sockindex]);
 
-
-#if POLARSSL_VERSION_NUMBER<0x01000000
-  ssl_set_ciphers(&connssl->ssl, ssl_default_ciphers);
-#else
-  ssl_set_ciphersuites(&connssl->ssl, ssl_default_ciphersuites);
-#endif
+  ssl_set_ciphersuites(&connssl->ssl, ssl_list_ciphersuites());
   if(!Curl_ssl_getsessionid(conn, &old_session, &old_session_size)) {
     memcpy(&connssl->ssn, old_session, old_session_size);
     infof(data, "PolarSSL re-using session\n");
   }
 
-/* PolarSSL SVN revision r1316 to r1317, matching <1.2.0 is to cover Ubuntu's
-   1.1.4 version and the like */
-#if POLARSSL_VERSION_NUMBER<0x01020000
-  ssl_set_session(&connssl->ssl, 1, 600,
-                  &connssl->ssn);
-#else
   ssl_set_session(&connssl->ssl,
                   &connssl->ssn);
-#endif
 
   ssl_set_ca_chain(&connssl->ssl,
                    &connssl->cacert,
@@ -365,13 +351,7 @@ polarssl_connect_step2(struct connectdata *conn,
   }
 
   infof(data, "PolarSSL: Handshake complete, cipher is %s\n",
-#if POLARSSL_VERSION_NUMBER<0x01000000
-        ssl_get_cipher(&conn->ssl[sockindex].ssl)
-#elif POLARSSL_VERSION_NUMBER >= 0x01010000
         ssl_get_ciphersuite(&conn->ssl[sockindex].ssl)
-#else
-        ssl_get_ciphersuite_name(&conn->ssl[sockindex].ssl)
-#endif
     );
 
   ret = ssl_get_verify_result(&conn->ssl[sockindex].ssl);
@@ -394,25 +374,12 @@ polarssl_connect_step2(struct connectdata *conn,
     return CURLE_PEER_FAILED_VERIFICATION;
   }
 
-/* PolarSSL SVN revision r1316 to r1317, matching <1.2.0 is to cover Ubuntu's
-   1.1.4 version and the like */
-#if POLARSSL_VERSION_NUMBER<0x01020000
-  if(conn->ssl[sockindex].ssl.peer_cert) {
-#else
   if(ssl_get_peer_cert(&(connssl->ssl))) {
-#endif
     /* If the session was resumed, there will be no peer certs */
     memset(buffer, 0, sizeof(buffer));
 
-/* PolarSSL SVN revision r1316 to r1317, matching <1.2.0 is to cover Ubuntu's
-   1.1.4 version and the like */
-#if POLARSSL_VERSION_NUMBER<0x01020000
-    if(x509parse_cert_info(buffer, sizeof(buffer), (char *)"* ",
-                           conn->ssl[sockindex].ssl.peer_cert) != -1)
-#else
-    if(x509parse_cert_info(buffer, sizeof(buffer), (char *)"* ",
-                           ssl_get_peer_cert(&(connssl->ssl))) != -1)
-#endif
+    if(x509_crt_info(buffer, sizeof(buffer), (char *)"* ",
+                     ssl_get_peer_cert(&(connssl->ssl))) != -1)
       infof(data, "Dumping cert info:\n%s\n", buffer);
   }
 
@@ -497,8 +464,8 @@ void Curl_polarssl_close_all(struct SessionHandle *data)
 void Curl_polarssl_close(struct connectdata *conn, int sockindex)
 {
   rsa_free(&conn->ssl[sockindex].rsa);
-  x509_free(&conn->ssl[sockindex].clicert);
-  x509_free(&conn->ssl[sockindex].cacert);
+  x509_crt_free(&conn->ssl[sockindex].clicert);
+  x509_crt_free(&conn->ssl[sockindex].cacert);
   x509_crl_free(&conn->ssl[sockindex].crl);
   ssl_free(&conn->ssl[sockindex].ssl);
 }
