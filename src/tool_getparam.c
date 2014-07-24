@@ -222,6 +222,7 @@ static const struct LongShort aliases[]= {
   {"G",  "get",                      FALSE},
   {"h",  "help",                     FALSE},
   {"H",  "header",                   TRUE},
+  {"Hp", "proxy-header",             TRUE},
   {"i",  "include",                  FALSE},
   {"I",  "head",                     FALSE},
   {"j",  "junk-session-cookies",     FALSE},
@@ -1238,7 +1239,7 @@ ParameterError getparameter(char *flag,    /* f or -long-flag */
            &-letter */
         char *oldpost = config->postfields;
         curl_off_t oldlen = config->postfieldsize;
-        curl_off_t newlen = oldlen + size + 2;
+        curl_off_t newlen = oldlen + curlx_uztoso(size) + 2;
         config->postfields = malloc((size_t)newlen);
         if(!config->postfields) {
           Curl_safefree(oldpost);
@@ -1256,7 +1257,7 @@ ParameterError getparameter(char *flag,    /* f or -long-flag */
       }
       else {
         config->postfields = postdata;
-        config->postfieldsize = size;
+        config->postfieldsize = curlx_uztoso(size);
       }
     }
     /*
@@ -1404,7 +1405,10 @@ ParameterError getparameter(char *flag,    /* f or -long-flag */
       break;
     case 'H':
       /* A custom header to append to a list */
-      err = add2list(&config->headers, nextarg);
+      if(subletter == 'p') /* --proxy-header */
+        err = add2list(&config->proxyheaders, nextarg);
+      else
+        err = add2list(&config->headers, nextarg);
       if(err)
         return err;
       break;
@@ -1828,6 +1832,10 @@ ParameterError parse_args(struct GlobalConfig *config, int argc,
 
         result = getparameter(flag, nextarg, &passarg, config, operation);
         if(result == PARAM_NEXT_OPERATION) {
+          /* Reset result as PARAM_NEXT_OPERATION is only used here and not
+             returned from this function */
+          result = PARAM_OK;
+
           if(operation->url_list && operation->url_list->url) {
             /* Allocate the next config */
             operation->next = malloc(sizeof(struct OperationConfig));
@@ -1851,9 +1859,6 @@ ParameterError parse_args(struct GlobalConfig *config, int argc,
             else
               result = PARAM_NO_MEM;
           }
-
-          /* Reset result to continue */
-          result = PARAM_OK;
         }
         else if(!result && passarg)
           i++; /* we're supposed to skip this */

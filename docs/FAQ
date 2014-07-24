@@ -99,6 +99,7 @@ FAQ
   5.15 How do I get an FTP directory listing?
   5.16 I want a different time-out!
   5.17 Can I write a server with libcurl?
+  5.18 Does libcurl use threads?
 
  6. License Issues
   6.1 I have a GPL program, can I use the libcurl library?
@@ -1098,6 +1099,12 @@ FAQ
   your system has such.  Note that you must never share the same handle in
   multiple threads.
 
+  libcurl's implementation of timeouts might use signals (depending on what it
+  was built to use for name resolving), and signal handling is generally not
+  thread-safe.  Multi-threaded Applicationss that call libcurl from different
+  threads (on different handles) might want to use CURLOPT_NOSIGNAL, e.g.:
+
+    curl_easy_setopt(handle, CURLOPT_NOSIGNAL, true);
 
   If you use a OpenSSL-powered libcurl in a multi-threaded environment, you
   need to provide one or two locking functions:
@@ -1365,6 +1372,19 @@ FAQ
   server for. And there are really good stand-alone ones that have been tested
   and proven for many years. There's no need for you to reinvent them!
 
+  5.18 Does libcurl use threads?
+
+  Put simply: no, libcurl will execute in the same thread you call it in. All
+  callbacks will be called in the same thread as the one you call libcurl in.
+
+  If you want to avoid your thread to be blocked by the libcurl call, you make
+  sure you use the non-blocking API which will do transfers asynchronously -
+  but still in the same single thread.
+
+  libcurl will potentially internally use threads for name resolving, if it
+  was built to work like that, but in those cases it'll create the child
+  threads by itself and they will only be used and then killed internally by
+  libcurl and never exposed to the outside.
 
 6. License Issues
 

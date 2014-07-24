@@ -1209,7 +1209,9 @@ if test x"$want_gss" = xyes; then
   AC_MSG_RESULT(yes)
 
   if test -z "$GSSAPI_INCS"; then
-     if test -f "$GSSAPI_ROOT/bin/krb5-config"; then
+     if test -n "$host_alias" -a -f "$GSSAPI_ROOT/bin/$host_alias-krb5-config"; then
+        GSSAPI_INCS=`$GSSAPI_ROOT/bin/$host_alias-krb5-config --cflags gssapi`
+     elif test -f "$GSSAPI_ROOT/bin/krb5-config"; then
         GSSAPI_INCS=`$GSSAPI_ROOT/bin/krb5-config --cflags gssapi`
      elif test "$GSSAPI_ROOT" != "yes"; then
         GSSAPI_INCS="-I$GSSAPI_ROOT/include"
@@ -1301,7 +1303,12 @@ if test x"$want_gss" = xyes; then
         LIBS="-lgss $LIBS"
         ;;
      *)
-        if test -f "$GSSAPI_ROOT/bin/krb5-config"; then
+        if test -n "$host_alias" -a -f "$GSSAPI_ROOT/bin/$host_alias-krb5-config"; then
+           dnl krb5-config doesn't have --libs-only-L or similar, put everything
+           dnl into LIBS
+           gss_libs=`$GSSAPI_ROOT/bin/$host_alias-krb5-config --libs gssapi`
+           LIBS="$gss_libs $LIBS"
+        elif test -f "$GSSAPI_ROOT/bin/krb5-config"; then
            dnl krb5-config doesn't have --libs-only-L or similar, put everything
            dnl into LIBS
            gss_libs=`$GSSAPI_ROOT/bin/krb5-config --libs gssapi`
@@ -2003,6 +2010,9 @@ if test "$curl_ssl_msg" = "$init_ssl_msg"; then
       dnl cyassl/ctaocrypt/types.h needs SIZEOF_LONG_LONG defined!
       AC_CHECK_SIZEOF(long long)
 
+      dnl Versions since at least 2.9.4 renamed error.h to error-ssl.h
+      AC_CHECK_HEADERS(cyassl/error-ssl.h)
+
       LIBS="-lcyassl -lm $LIBS"
 
       if test -n "$cyassllib"; then
@@ -2164,10 +2174,11 @@ if test "$curl_ssl_msg" = "$init_ssl_msg"; then
       USE_AXTLS="yes"
       curl_ssl_msg="enabled (axTLS)"
 
-
-      LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$LIB_AXTLS"
-      export LD_LIBRARY_PATH
-      AC_MSG_NOTICE([Added $LIB_AXTLS to LD_LIBRARY_PATH])
+      if test "x$cross_compiling" != "xyes"; then
+        LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$LIB_AXTLS"
+        export LD_LIBRARY_PATH
+        AC_MSG_NOTICE([Added $LIB_AXTLS to LD_LIBRARY_PATH])
+      fi
       ],[
       LDFLAGS="$CLEANLDFLAGS"
       CPPFLAGS="$CLEANCPPFLAGS"
@@ -2699,7 +2710,7 @@ if test "$want_idn" = "yes"; then
     if test "x$ac_cv_header_tld_h" = "xyes"; then
       AC_SUBST([IDN_ENABLED], [1])
       curl_idn_msg="enabled"
-      if test -n "$IDN_DIR"; then
+      if test -n "$IDN_DIR" -a "x$cross_compiling" != "xyes"; then
         LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$IDN_DIR"
         export LD_LIBRARY_PATH
         AC_MSG_NOTICE([Added $IDN_DIR to LD_LIBRARY_PATH])
@@ -2728,8 +2739,7 @@ dnl **********************************************************************
 dnl Check for nghttp2
 dnl **********************************************************************
 
-AC_MSG_CHECKING([whether to build with nghttp2])
-OPT_H2="no"
+OPT_H2="yes"
 AC_ARG_WITH(nghttp2,
 AC_HELP_STRING([--with-nghttp2=PATH],[Enable nghttp2 usage])
 AC_HELP_STRING([--without-nghttp2],[Disable nghttp2 usage]),
@@ -2737,76 +2747,69 @@ AC_HELP_STRING([--without-nghttp2],[Disable nghttp2 usage]),
 case "$OPT_H2" in
   no)
     dnl --without-nghttp2 option used
-    want_idn="no"
-    AC_MSG_RESULT([no])
-    ;;
-  default)
-    dnl configure option not specified
     want_h2="no"
-    want_h2_path="default"
-    AC_MSG_RESULT([no])
     ;;
   yes)
     dnl --with-nghttp2 option used without path
-    want_h2="yes"
+    want_h2="default"
     want_h2_path=""
-    AC_MSG_RESULT([yes])
     ;;
   *)
     dnl --with-nghttp2 option used with path
     want_h2="yes"
-    want_h2_path="$withval"
-    AC_MSG_RESULT([yes ($withval)])
+    want_h2_path="$withval/lib/pkgconfig"
     ;;
 esac
 
 curl_h2_msg="disabled (--with-nghttp2)"
-if test X"$OPT_H2" != Xno; then
-  dnl backup the pre-librtmp variables
+if test X"$want_h2" != Xno; then
+  dnl backup the pre-nghttp2 variables
   CLEANLDFLAGS="$LDFLAGS"
   CLEANCPPFLAGS="$CPPFLAGS"
   CLEANLIBS="$LIBS"
 
-  h2pcdir=${want_h2_path}/lib/pkgconfig
-  CURL_CHECK_PKGCONFIG(libnghttp2, $h2pcdir)
+  CURL_CHECK_PKGCONFIG(libnghttp2, $want_h2_path)
 
   if test "$PKGCONFIG" != "no" ; then
-    LIB_H2=`CURL_EXPORT_PCDIR([$h2pcdir])
+    LIB_H2=`CURL_EXPORT_PCDIR([$want_h2_path])
       $PKGCONFIG --libs-only-l libnghttp2`
     AC_MSG_NOTICE([-l is $LIB_H2])
 
-    CPP_H2=`CURL_EXPORT_PCDIR([$h2pcdir]) dnl
+    CPP_H2=`CURL_EXPORT_PCDIR([$want_h2_path]) dnl
       $PKGCONFIG --cflags-only-I libnghttp2`
     AC_MSG_NOTICE([-I is $CPP_H2])
 
-    LD_H2=`CURL_EXPORT_PCDIR([$h2pcdir])
+    LD_H2=`CURL_EXPORT_PCDIR([$want_h2_path])
       $PKGCONFIG --libs-only-L libnghttp2`
     AC_MSG_NOTICE([-L is $LD_H2])
 
+    LDFLAGS="$LDFLAGS $LD_H2"
+    CPPFLAGS="$CPPFLAGS $CPP_H2"
+    LIBS="$LIB_H2 $LIBS"
+
+    AC_CHECK_LIB(nghttp2, nghttp2_session_client_new,
+      [
+       AC_CHECK_HEADERS(nghttp2/nghttp2.h,
+          curl_h2_msg="enabled (nghttp2)"
+          NGHTTP2_ENABLED=1
+          AC_DEFINE(USE_NGHTTP2, 1, [if nghttp2 is in use])
+          AC_SUBST(USE_NGHTTP2, [1])
+       )
+      ],
+        dnl not found, revert back to clean variables
+        LDFLAGS=$CLEANLDFLAGS
+        CPPFLAGS=$CLEANCPPFLAGS
+        LIBS=$CLEANLIBS
+    )
+
   else
-    dnl To avoid link errors, we do not allow --libnghttp2 without
-    dnl a pkgconfig file
-    AC_MSG_ERROR([--with-nghttp2 was specified but could not find libnghttp2 pkg-config file.])
+    dnl no nghttp2 pkg-config found, deal with it
+    if test X"$want_h2" != Xdefault; then
+      dnl To avoid link errors, we do not allow --with-nghttp2 without
+      dnl a pkgconfig file
+      AC_MSG_ERROR([--with-nghttp2 was specified but could not find libnghttp2 pkg-config file.])
+    fi
   fi
-
-  LDFLAGS="$LDFLAGS $LD_H2"
-  CPPFLAGS="$CPPFLAGS $CPP_H2"
-  LIBS="$LIB_H2 $LIBS"
-
-  AC_CHECK_LIB(nghttp2, nghttp2_session_client_new,
-    [
-     AC_CHECK_HEADERS(nghttp2/nghttp2.h,
-        curl_h2_msg="enabled (nghttp2)"
-        NGHTTP2_ENABLED=1
-        AC_DEFINE(USE_NGHTTP2, 1, [if nghttp2 is in use])
-        AC_SUBST(USE_NGHTTP2, [1])
-     )
-    ],
-      dnl not found, revert back to clean variables
-      LDFLAGS=$CLEANLDFLAGS
-      CPPFLAGS=$CLEANCPPFLAGS
-      LIBS=$CLEANLIBS
-  )
 
 fi
 
@@ -3037,8 +3040,10 @@ AC_CHECK_FUNCS([fork \
   getppid \
   getprotobyname \
   getpwuid \
+  getpwuid_r \
   getrlimit \
   gettimeofday \
+  if_nametoindex \
   inet_addr \
   perror \
   pipe \
@@ -3401,6 +3406,12 @@ fi
 if test "x$USE_NGHTTP2" = "x1"; then
   SUPPORT_FEATURES="$SUPPORT_FEATURES HTTP2"
 fi
+if test "x$curl_spnego_msg" = "xenabled"; then
+  SUPPORT_FEATURES="$SUPPORT_FEATURES SPNEGO"
+fi
+if test "x$want_gss" = "xyes"; then
+  SUPPORT_FEATURES="$SUPPORT_FEATURES GSS-API"
+fi
 
 AC_SUBST(SUPPORT_FEATURES)
 
@@ -3503,6 +3514,7 @@ AC_CONFIG_FILES([Makefile \
            docs/Makefile \
            docs/examples/Makefile \
            docs/libcurl/Makefile \
+           docs/libcurl/opts/Makefile \
            include/Makefile \
            include/curl/Makefile \
            src/Makefile \
